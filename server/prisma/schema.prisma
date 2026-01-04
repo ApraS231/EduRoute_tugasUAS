@@ -1,0 +1,101 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = "mysql://root@localhost:3306/eduroute_bontang"
+}
+
+// --- ENUMS ---
+enum SchoolType {
+  SMA
+  SMK
+  MA
+  SWASTA
+}
+
+enum RouteType {
+  BUS_SEKOLAH
+  ANGKOT
+  JALAN_UTAMA
+}
+
+// --- GIS MODELS ---
+
+// 1. Sekolah (Marker)
+model School {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique @db.VarChar(100)
+  type        SchoolType
+  address     String     @db.Text
+  latitude    Float
+  longitude   Float
+  photoUrl    String?    @map("photo_url")
+  description String?    @db.Text
+
+  zones Zone[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("schools")
+}
+
+// 2. Zonasi (Polygon)
+model Zone {
+  id          Int    @id @default(autoincrement())
+  name        String
+  color       String @db.VarChar(7)
+  coordinates Json   // GeoJSON Polygon [[lat,lng], ...]
+
+  schoolId Int    @map("school_id")
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@map("zones")
+}
+
+// 3. Rute Visual (Untuk Layer Statis di Peta)
+model Route {
+  id          Int       @id @default(autoincrement())
+  name        String
+  type        RouteType
+  color       String    @db.VarChar(7)
+  pathData    Json      // GeoJSON LineString
+  description String?   @db.Text
+
+  @@map("routes")
+}
+
+// --- PATHFINDING MODELS (Untuk Algoritma A*) ---
+
+// 4. Node Graph (Titik Persimpangan)
+model GraphNode {
+  id        Int    @id // ID manual dari sample_nodes.geojson
+  label     String?
+  latitude  Float
+  longitude Float
+
+  edgesFrom GraphEdge[] @relation("SourceNode")
+  edgesTo   GraphEdge[] @relation("TargetNode")
+
+  @@map("graph_nodes")
+}
+
+// 5. Edge Graph (Garis Jalan Antar Node)
+model GraphEdge {
+  id Int @id @default(autoincrement())
+
+  sourceId Int
+  source   GraphNode @relation("SourceNode", fields: [sourceId], references: [id])
+
+  targetId Int
+  target   GraphNode @relation("TargetNode", fields: [targetId], references: [id])
+
+  weight   Float // Jarak dalam meter (Cost)
+  geometry Json? // Bentuk jalan (LineString)
+
+  @@map("graph_edges")
+}
